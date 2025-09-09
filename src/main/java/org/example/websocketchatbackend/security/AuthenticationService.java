@@ -3,9 +3,8 @@ package org.example.websocketchatbackend.security;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.example.websocketchatbackend.dto.user.UserLoginRequestDto;
-import org.example.websocketchatbackend.dto.user.UserLoginResponseDto;
 import org.example.websocketchatbackend.dto.user.UserRegisterRequestDto;
-import org.example.websocketchatbackend.dto.user.UserResponseDto;
+import org.example.websocketchatbackend.dto.user.UserTokenResponseDto;
 import org.example.websocketchatbackend.exception.UserNameAlreadyExistsException;
 import org.example.websocketchatbackend.mapper.UserMapper;
 import org.example.websocketchatbackend.model.Role;
@@ -28,15 +27,15 @@ public class AuthenticationService {
   private final PasswordEncoder passwordEncoder;
   private final RoleRepository roleRepository;
 
-  public UserLoginResponseDto authenticate(UserLoginRequestDto requestDto) {
+  public UserTokenResponseDto authenticate(UserLoginRequestDto requestDto) {
     Authentication authenticate = authenticationManager.authenticate(
         new UsernamePasswordAuthenticationToken(requestDto.username(),
             requestDto.password())
     );
-    return new UserLoginResponseDto(jwtUtil.generateToken(authenticate.getName()));
+    return new UserTokenResponseDto(jwtUtil.generateToken(authenticate.getName()));
   }
 
-  public UserResponseDto register(UserRegisterRequestDto requestDto) {
+  public UserTokenResponseDto register(UserRegisterRequestDto requestDto) {
     if (userRepository.existsByUsername(requestDto.username())) {
       throw new UserNameAlreadyExistsException(requestDto.username());
     }
@@ -44,6 +43,6 @@ public class AuthenticationService {
     userEntity.setPassword(passwordEncoder.encode(userEntity.getPassword()));
     userEntity.setRoles(Set.of(roleRepository.findRoleByName(Role.RoleName.ROLE_USER)));
     userRepository.save(userEntity);
-    return userMapper.toUserResponseDto(userEntity);
+    return new UserTokenResponseDto(jwtUtil.generateToken(userEntity.getUsername()));
   }
 }

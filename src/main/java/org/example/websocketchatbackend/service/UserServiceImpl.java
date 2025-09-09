@@ -6,7 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.example.websocketchatbackend.dto.user.UpdateUserResponseDto;
 import org.example.websocketchatbackend.dto.user.UserResponseDto;
@@ -14,6 +16,7 @@ import org.example.websocketchatbackend.exception.UserNameAlreadyExistsException
 import org.example.websocketchatbackend.exception.UserNotFoundException;
 import org.example.websocketchatbackend.mapper.UserMapper;
 import org.example.websocketchatbackend.model.User;
+import org.example.websocketchatbackend.repository.ChatRepository;
 import org.example.websocketchatbackend.repository.UserRepository;
 import org.example.websocketchatbackend.security.JwtUtil;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -28,10 +31,18 @@ public class UserServiceImpl implements UserService {
   private final UserRepository userRepository;
   private final UserMapper userMapper;
   private final JwtUtil jwtUtil;
+  private final ChatRepository chatRepository;
 
   @Override
   public List<UserResponseDto> findByUsername(String username) {
-    return userRepository.findByUsernameContainingIgnoreCase(username).stream()
+    User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+    Set<String> usersFromChats = chatRepository.findChatsByUsersContaining(user).stream()
+        .flatMap(chat -> chat.getUsers().stream())
+        .map(User::getUsername)
+        .collect(Collectors.toSet());
+
+    return userRepository.findByUsernameContainingIgnoreCase(username, usersFromChats).stream()
         .map(userMapper::toUserResponseDto)
         .toList();
   }

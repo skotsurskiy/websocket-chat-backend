@@ -1,22 +1,33 @@
 package org.example.websocketchatbackend.exception;
 
+import static java.net.URI.create;
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
+import static org.springframework.http.ProblemDetail.forStatusAndDetail;
+
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import org.springframework.context.support.DefaultMessageSourceResolvable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.FieldError;
-import org.springframework.validation.ObjectError;
+import org.springframework.lang.NonNull;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 @ControllerAdvice
-public class GlobalExceptionHandler {
-  public static final String TITLE_COLON_SEPARATOR = ": ";
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+  private static final String VALIDATION_MESSAGE_DELIMITER = ", ";
   public static final String TITLE = "title";
   public static final String TIMESTAMP = "timestamp";
   public static final String STATUS = "status";
@@ -26,29 +37,35 @@ public class GlobalExceptionHandler {
   public ResponseEntity<Map<String, Object>> handleUserNameAlreadyExistsException(
       UserNameAlreadyExistsException ex
   ) {
-    return getResponseEntity(HttpStatus.BAD_REQUEST, "Username already exists", ex);
+    return getResponseEntity(BAD_REQUEST, "Username already exists", ex);
   }
 
   @ExceptionHandler(UserNotFoundException.class)
   public ResponseEntity<Map<String, Object>> handleUserNotFoundException(
       UserNotFoundException ex
   ) {
-    return getResponseEntity(HttpStatus.NOT_FOUND, "User not found", ex);
+    return getResponseEntity(NOT_FOUND, "User not found", ex);
   }
 
-  @ExceptionHandler(MethodArgumentNotValidException.class)
-  public ResponseEntity<Map<String, Object>> handleValidationException(
-      MethodArgumentNotValidException ex
+  @ExceptionHandler(ChatAlreadyExistsException.class)
+  public ResponseEntity<Map<String, Object>> handleChatAlreadyExistsException(
+      ChatAlreadyExistsException ex
   ) {
-    List<String> details = ex.getBindingResult().getAllErrors().stream()
-        .map(this::getErrorMessage)
-        .toList();
+    return getResponseEntity(BAD_REQUEST, "Chat already exists", ex);
+  }
 
-    Map<String, Object> body =
-        getDefaultBody(HttpStatus.BAD_REQUEST, "Request validation error");
-    body.put(DETAILS, details);
+  @ExceptionHandler(ChatNotFoundException.class)
+  public ResponseEntity<Map<String, Object>> handleChatNotFoundException(
+      ChatNotFoundException ex
+  ) {
+    return getResponseEntity(NOT_FOUND, "Chat not found", ex);
+  }
 
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+  @ExceptionHandler(MessageBlankContentException.class)
+  public ResponseEntity<Map<String, Object>> handleMessageBlankContentException(
+      MessageBlankContentException ex
+  ) {
+    return getResponseEntity(BAD_REQUEST, "Message is blank", ex);
   }
 
   @ExceptionHandler(ConstraintViolationException.class)
@@ -59,10 +76,27 @@ public class GlobalExceptionHandler {
         .map(ConstraintViolation::getMessage)
         .toList();
 
-    Map<String, Object> body = getDefaultBody(HttpStatus.BAD_REQUEST, "Invalid enum type");
+    Map<String, Object> body = getDefaultBody(BAD_REQUEST, "Invalid enum type");
     body.put(DETAILS, details);
 
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    return ResponseEntity.status(BAD_REQUEST).body(body);
+  }
+
+  @Override
+  protected ResponseEntity<Object> handleMethodArgumentNotValid(
+      MethodArgumentNotValidException ex,
+      @NonNull HttpHeaders headers,
+      @NonNull HttpStatusCode status,
+      @NonNull WebRequest request) {
+    ProblemDetail problemDetail =
+        forStatusAndDetail(
+            BAD_REQUEST,
+            ex.getBindingResult().getFieldErrors().stream()
+                .map(DefaultMessageSourceResolvable::getDefaultMessage)
+                .collect(Collectors.joining(VALIDATION_MESSAGE_DELIMITER)));
+    problemDetail.setType(create("validation-error"));
+    problemDetail.setTitle("Field Validation Failed");
+    return ResponseEntity.status(BAD_REQUEST).body(problemDetail);
   }
 
   private ResponseEntity<Map<String, Object>> getResponseEntity(
@@ -85,14 +119,5 @@ public class GlobalExceptionHandler {
     response.put(STATUS, status);
 
     return response;
-  }
-
-  private String getErrorMessage(ObjectError objectError) {
-    if (objectError instanceof FieldError fieldError) {
-      String defaultMessage = fieldError.getDefaultMessage();
-      String field = fieldError.getField();
-      return field + TITLE_COLON_SEPARATOR + defaultMessage;
-    }
-    return objectError.getDefaultMessage();
   }
 }

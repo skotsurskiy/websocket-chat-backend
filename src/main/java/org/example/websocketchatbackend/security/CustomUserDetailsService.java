@@ -1,6 +1,7 @@
 package org.example.websocketchatbackend.security;
 
 import lombok.RequiredArgsConstructor;
+import org.example.websocketchatbackend.exception.UserNotFoundException;
 import org.example.websocketchatbackend.repository.UserRepository;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -15,6 +16,6 @@ public class CustomUserDetailsService implements UserDetailsService {
   @Override
   public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
     return userRepository.findByUsername((username)).orElseThrow(()
-        -> new UsernameNotFoundException("Can't find user by username: " + username));
+        -> new UserNotFoundException(username));
   }
 }
